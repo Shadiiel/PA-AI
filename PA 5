@@ -1,0 +1,113 @@
+import random
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+def monte_carlo_agent(state, simulations_per_action=100):
+    """aa
+    Selecciona la mejor jugada basada en simulaciones Monte Carlo.
+    """
+    mano_jugador = state['mano_jugador']
+    mazo_restante = state['mazo_restante']
+    triunfo      = state['triunfo']
+
+    return monte_carlo_jugada(mano_jugador, mazo_restante, triunfo, iterations=simulations_per_action)
+
+
+palos   = ['Oros', 'Copas', 'Espadas', 'Bastos']
+valores = ['1', '2', '3', '4', '5', '6', '7', '10', '11', '12']
+puntos  = {'1':11, '3':10, '10':2, '11':3, '12':4}
+
+def crear_mazo():
+    """Crea un mazo estándar de Briscas con todas las combinaciones posibles."""
+    return [(v, p) for p in palos for v in valores]
+
+def valor_puntos(carta):
+    """Retorna los puntos de una carta según las reglas de Briscas."""
+    return puntos.get(carta[0], 0)
+
+def determinar_ganador(c1, c2, triunfo):
+    """
+    Determina el ganador entre dos cartas según las reglas de Briscas
+    """
+    if c1[1] == c2[1]:
+        return "jugador" if valores.index(c1[0]) > valores.index(c2[0]) else "oponente"
+    if c2[1] == triunfo and c1[1] != triunfo:
+        return "oponente"
+    if c1[1] == triunfo and c2[1] != triunfo:
+        return "jugador"
+    return "jugador"
+
+def simular_partida(mano_j, mano_o, triunfo):
+    """
+    Simula una partida completa, devuelve True si gana el jugador, False en caso contrario.
+    """
+    pj, po = 0, 0
+    mj, mo = mano_j[:], mano_o[:]
+    random.shuffle(mj); random.shuffle(mo)
+    while mj and mo:
+        cj, co = mj.pop(0), mo.pop(0)
+        if determinar_ganador(cj, co, triunfo) == "jugador":
+            pj += valor_puntos(cj) + valor_puntos(co)
+        else:
+            po += valor_puntos(cj) + valor_puntos(co)
+    return pj > po
+
+
+def monte_carlo_jugada(mano_jugador, mazo_restante, triunfo, iterations=100):
+    """
+    Evalúa cada carta de la mano con 'iterations' simulaciones Monte Carlo
+    Retorna (mejor_carta, resultados) donde resultados[carta]=número de victorias
+    """
+    resultados = {}
+    for carta in mano_jugador:
+        wins = 0
+        for _ in range(iterations):
+            mj = mano_jugador[:]
+            mj.remove(carta)
+            if len(mazo_restante) < len(mj) + 1:
+                continue
+            mo = random.sample(mazo_restante, len(mj) + 1)
+            if simular_partida([carta] + mj, mo, triunfo):
+                wins += 1
+        resultados[carta] = wins
+    best = max(resultados, key=resultados.get)
+    return best, resultados
+
+
+random.seed(42)
+mazo = crear_mazo()
+random.shuffle(mazo)
+mano_jugador   = mazo[:3]
+mazo_restante  = [c for c in mazo if c not in mano_jugador]
+triunfo        = random.choice(palos)
+
+state = {
+    'mano_jugador': mano_jugador,
+    'mazo_restante': mazo_restante,
+    'triunfo': triunfo
+}
+
+
+mejor_carta, resultados = monte_carlo_agent(state, simulations_per_action=100)
+
+df = pd.DataFrame(
+    [(f"{v} de {p}", resultados[(v,p)]) for (v,p) in resultados],
+    columns=["Carta", "Victorias"]
+)
+print("Triunfo:", triunfo)
+print("Mano del jugador:", mano_jugador)
+print("\nTabla de resultados:")
+print(df)
+print("\nMejor jugada recomendada:", f"{mejor_carta[0]} de {mejor_carta[1]}")
+
+labels = [f"{v} de {p}" for (v,p) in resultados]
+values = [resultados[(v,p)] for (v,p) in resultados]
+plt.figure(figsize=(10,6))
+plt.bar(labels, values)
+plt.xlabel("Cartas posibles")
+plt.ylabel("Victorias en simulaciones")
+plt.title("Evaluación Monte Carlo de cada carta")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
